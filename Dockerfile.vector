@@ -1,0 +1,13 @@
+FROM timberio/vector:latest-debian
+
+RUN apt-get update && apt-get install -y \
+    lua5.4 \
+    lua5.4-dev \
+    luarocks \
+    libpq-dev  \
+    && apt-get clean
+
+
+RUN luarocks-5.4 install luasql-postgres PGSQL_INCDIR=/usr/include/postgresql/ LUA_INCDIR=/usr/include/lua5.4/
+
+

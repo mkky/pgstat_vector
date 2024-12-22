@@ -1,0 +1,106 @@
+sources:
+  fake_logs:
+    type: demo_logs
+    format: apache_common
+    lines:
+      - line1
+
+transforms:
+  pg:
+    inputs:
+      - fake_logs
+    type: lua
+    timers:
+      - interval_seconds: 5
+        handler: pg
+    version: "2"
+    hooks:
+      process: process
+    source: |-
+      local url ="${PG_URL:-postgresql://demo_user:demo_password@postgres:5432/demo_db}"
+
+      local queries = {
+        pg_stat_bgwriter = [[ SELECT * FROM pg_stat_bgwriter ]]
+      }
+
+      local queries = {
+
+        pg_stat_statements = [[
+         SELECT 
+          query,
+          calls,
+          total_exec_time,
+          mean_exec_time,
+          max_exec_time,
+          min_exec_time,
+          stddev_exec_time,
+         rows
+         FROM pg_stat_statements
+         WHERE total_exec_time > 1
+         ORDER BY total_exec_time DESC
+         LIMIT 2
+        ]],
+
+        pg_stat_bgwriter = [[
+          SELECT 
+            buffers_alloc,
+            buffers_clean,
+           maxwritten_clean,
+           stats_reset
+          FROM pg_stat_bgwriter
+        ]],
+        pg_stat_activity = [[
+          SELECT 
+            pid,
+            usename,
+            application_name,
+            client_addr,
+            state,
+            query,
+            query_start,
+            state_change
+          FROM pg_stat_activity
+          WHERE state != 'idle'
+        ]]
+      }
+
+      local luasql = require("luasql.postgres")
+
+      function process()
+      end
+
+      function pg(emit)
+        local env = luasql.postgres()
+        local conn, err = env:connect(url)
+
+        if not conn then
+          print("Error connecting to the database: " .. err)
+          return
+        end
+
+        local all_results = {}
+        for name, query in pairs(queries) do
+          local cursor, err = conn:execute(query)
+          local rows = {}
+          local row = cursor:fetch({}, "a")
+          while row do
+            table.insert(rows, row)
+            row = cursor:fetch({}, "a")
+          end
+          all_results[name] = rows
+        end
+        emit({ log = { ts = os.date("!%Y-%m-%dT%H:%M:%S"), queries = all_results } })
+        conn:close()
+        env:close()
+      end
+
+sinks:
+  json_log_to_tmp_folder:
+    type: file
+    inputs:
+      - pg
+    compression: none
+    path: /tmp/out.json
+    encoding:
+      codec: json
+

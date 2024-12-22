@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres-demo
+    environment:
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_password
+      POSTGRES_DB: demo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pg/:/var/lib/postgresql/data
+      - ./init_sql/:/docker-entrypoint-initdb.d/
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+
+  vector:
+    #image: timberio/vector:latest-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.vector
+    container_name: vector
+    volumes:
+      - ./vector:/etc/vector/
+      - ./logs:/var/log/
+      - ./tmp:/tmp/
+    ports:
+      - 8686:8686
+      #environment:
+      #LUA_CPATH: /usr/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/?.so;
+
+
+      #volumes:
+      #postgres_data:
